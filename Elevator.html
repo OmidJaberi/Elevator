@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Elevator Simulator</title>
+	<style type="text/css">
+		* {
+			padding: 0;
+			margin: 0;
+			font-family: 'arial';
+		}
+		body {
+			display: flex;
+			flex-direction: row;
+			background: #333;
+			padding: 2vw;
+		}
+		.building {
+			background: #fff;
+			width: 40vw;
+		}
+		.cover {
+			position: fixed;
+			top: 0vw;
+			background: #333;
+			width: 800vw;
+			z-index: 900;
+			height: 4.1vw;
+		}
+		.track {
+			position: fixed;
+			top: 1vw;
+			background: #333;
+			display: flex;
+			flex-wrap: wrap;
+			flex-direction: row;
+			width: 40vw;
+			align-items: center;
+			justify-content: space-evenly;
+			height: 4.7vw;
+			z-index: 1000;
+		}
+		.num {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: #0C0C0C;
+			color: white;
+			font-size: 2vw;
+			font-weight: bold;
+			height: 3vw;
+			width: 32.35%;
+			border-top-left-radius: 5vw;
+			border-top-right-radius: 5vw;
+			border: 0.2vw solid red;
+			border-bottom: 0;
+		}
+		.dir {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: #0C0C0C;
+			color: white;
+			font-weight: bold;
+			height: 2vw;
+			width: 32.35%;
+			border: 0.2vw solid red;
+			border-bottom: 0;
+			border-top: 0;
+		}
+		.floors {
+			margin-top: 4.1vw;
+			width: 39.45vw;
+			border: 0.3vw solid red;
+			border-top: 0;
+		}
+		.floor {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-evenly;
+			align-items: center;
+			width: 100%;
+			height: 8vw;
+			padding-bottom: 1vw;
+			margin-bottom: 0.5vw;
+			background: #e0e0e0;
+		}
+		.floor p {
+			width: 100%;
+			text-align: center;
+		}
+		.door {
+			width: 4vw;
+			height: 5vw;
+			background: gray;
+		}
+		button {
+			font-weight: bold;
+			width: 2.2vw;
+			height: 2.2vw;
+			border-radius: 100%;
+			border: 0;
+			background: black;
+			color: white;
+		}
+		button:hover {
+			color: red;
+		}
+		.active {
+			border: 2px solid red;
+		}
+		.red {
+			background: red;
+		}
+		.panels {
+			display: flex;
+			flex-wrap: wrap;
+			flex-direction: row;
+			justify-content: space-evenly;
+			position: fixed;
+			right: 2vw;
+			top: 10vw;
+			width: 53vw;
+		}
+		.panels p {
+			width: 17vw;
+			text-align: center;
+			padding-bottom: 1vw;
+			font-weight: bold;
+			font-size: 1.5vw;
+			color: red;
+		}
+		.panel {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-evenly;
+			align-items: center;
+			border-radius: 1vw;
+			border: 1px solid red;
+			width: 16vw;
+			background: grey;
+		}
+		.panel button {
+			margin: 0.7vw;
+			width: 2.5vw;
+			height: 2.5vw;
+		}
+	</style>
+</head>
+<body>
+	<div class="building">
+		<div class="cover"></div>
+		<div class="track">
+			<div id="left" class="num">1</div>
+			<div id="mid" class="num">1</div>
+			<div id="right" class="num">1</div>
+			<div id="leftdir" class="dir"></div>
+			<div id="middir" class="dir"></div>
+			<div id="rightdir" class="dir"></div>
+		</div>
+		<div class="floors" id="floors"></div>
+	</div>
+	<div class="panels">
+		<p>Left Elevator</p>
+		<p>Middle Elevator</p>
+		<p>Right Elevator</p>
+		<div class="panel" id="panelLeft"></div>
+		<div class="panel" id="panelMiddle"></div>
+		<div class="panel" id="panelRight"></div>
+	</div>
+	<script type="text/javascript">
+		const n = 24; // Number of Floors
+		const o = 5;  // Pending time for open doors
+
+		class Elevator {
+			static arr = [];		// Array of all Elevators
+			constructor(name) {
+				this.name = name;	// Floor Number Display HTML ID
+				this.curr = 1;		// Current Floor
+				this.direction = 0;	// Moving Direction (Up: +1, Down: -1, Not Moving: 0)
+				this.pending = 0;	// Pending Open Door Time
+				this.doors = [];	// Floor Doors ID in HTML (1 based)
+				this.queue = [];	// Floors in queue (Technically a bitmask style 1 based array)
+				this.btn = [];		// Platform Buttons (1 based)
+				Elevator.arr.push(this);
+			}
+			static floor_btn(floor, direction) {
+				let dir = (direction == 'u' ? +1 : -1);// Direction as a number
+				// Choose Elevator that reaches floor first:
+				let e = Elevator.arr[0];
+				for (let i = 1; i < Elevator.arr.length; i++)
+					if (e.dist(floor, dir) > Elevator.arr[i].dist(floor, dir))
+						e = Elevator.arr[i];
+
+				// Add floor to Elevator's Queue
+				e.queue[floor] = true;
+
+				// Activate Buttons:
+				document.getElementById(e.btn[floor]).classList.add('active');
+				document.getElementById(`${direction}${floor}`).classList.add('active');
+
+				if (e.direction == 0) // Move Elevator if it not moving
+					e.move(e.curr < floor ? +1 : -1);
+				let t = setInterval(() => {
+					// Wait for elevator to reach in the right direction
+					if (e.curr == floor && e.pending > 0) {
+						// DeActivate Button
+						document.getElementById(`${direction}${floor}`).classList.remove('active');
+						clearInterval(t);
+					}
+				}, 400);
+			}
+			panel_btn(floor) {
+				// Activate Button
+				document.getElementById(`p${this.name[0]}${floor}`).classList.add('active');
+
+				this.queue[floor] = true;
+				if (this.direction == 0)
+					this.move(this.curr < floor ? +1 : -1);
+			}
+			dist(floor, direction) {
+				// Estimate time reaching floor in correct direction
+				if (this.direction == 0)
+					return Math.abs(this.curr - floor);
+				// Simulate Movement:
+				let ans = 0;
+				let c = this.curr;			// Current Floor in Simulation
+				let q = [...this.queue];	// Floor Queue in Simulation
+				q[floor] = true;			// Floor is added to the Queue
+				let dir = this.direction;	// Direction in Simulation
+
+				while (c < n + 1 && c > 0) {
+					ans++;
+					c += dir;
+					q[c] = false;
+					if (c == floor)
+						if (direction == dir)
+							return ans;
+						else
+							// If floor is reached with the wrong direction, time until it comes back in the right direction must be calculated.
+							q[c] = true;
+					if (q[c])
+						ans += o; // Add pending time
+					// Determine if direction is changed
+					let changeDir = true;
+					for (let i = c; i < n + 1 && i > 0; i += dir)
+						if (q[i])
+							changeDir = false;
+					if (changeDir)
+						dir = -dir;
+				}
+			}
+			move(direction) {
+				// Make Display Background red:
+				document.getElementById(this.name).classList.add('red');
+				document.getElementById(`${this.name}dir`).classList.add('red');
+
+				this.direction = direction;
+
+				let t = setInterval(() => {
+					if (this.pending > 0)// Door is open
+						this.pending--;
+					else if (this.queue[this.curr]) {// Floor is in queue
+						// Remove current floor from queue
+						this.queue[this.curr] = false;
+						// Deactivate the button
+						document.getElementById(this.btn[this.curr]).classList.remove('active');
+						
+						// Open door and start pending time
+						this.pending = o;
+						document.getElementById(this.doors[this.curr]).classList.add('red');
+						
+						// Determine Next Direction
+						let d = 0;
+						for (let i = this.curr; i < n + 1 && i > 0; i += this.direction)
+							if (this.queue[i])
+								d = this.direction;
+						if (d == 0)
+							for (let i = this.curr; i < n + 1 && i > 0; i -= this.direction)
+								if (this.queue[i])
+									d = -this.direction;
+
+						// Display Direction
+						document.getElementById(`${this.name}dir`).innerHTML = (d == +1 ? '▲' : '▼');
+						if (d == 0)
+							document.getElementById(`${this.name}dir`).innerHTML = '';
+					}
+					else {// Passing a floor
+						// Determine Direction
+						let d = 0;
+						for (let i = this.curr; i < n + 1 && i > 0; i += this.direction)
+							if (this.queue[i])
+								d = this.direction;
+						if (d == 0)
+							for (let i = this.curr; i < n + 1 && i > 0; i -= this.direction)
+								if (this.queue[i])
+									d = -this.direction;
+						this.direction = d;
+
+						// Display Direction
+						document.getElementById(`${this.name}dir`).innerHTML = (d == +1 ? '▲' : '▼');
+						if (d == 0) {
+							document.getElementById(`${this.name}dir`).innerHTML = '';
+							// Deactivate Display
+							document.getElementById(`${this.name}dir`).classList.remove('red');
+							document.getElementById(this.name).classList.remove('red');
+							clearInterval(t);
+						}
+
+						// Close Floor Door
+						document.getElementById(this.doors[this.curr]).classList.remove('red');
+						// Deactivate Floor Door
+						document.getElementById(this.doors[this.curr]).classList.remove('active');
+						// Move to new Floor
+						this.curr += this.direction;						
+						// Activate new Floor Door
+						document.getElementById(this.doors[this.curr]).classList.add('active');
+						// Display on Floor Number Display
+						document.getElementById(this.name).innerHTML = this.curr;
+					}
+				}, 800);
+			}
+		}
+
+		// Create Elevators:
+		const left = new Elevator('left');
+		const mid = new Elevator('mid');
+		const right = new Elevator('right');
+
+		// Create Floors:
+		for (let i = n; i >= 1; i--) {
+			// Door IDs are l[floor number], m[floor number] and r[floor number]
+			document.getElementById('floors').innerHTML += `
+			<div class="floor">
+				<p>${i}</p>
+				<div class="door" id="l${i}"></div>
+				<button id="u${i}" onclick="Elevator.floor_btn(${i}, 'u')">▲</button>
+				<div class="door" id="m${i}"></div>
+				<button id="d${i}" onclick="Elevator.floor_btn(${i}, 'd')">▼</button>
+				<div class="door" id="r${i}"></div>
+			</div>`;
+
+			// Create Pannel Button:
+			// Door IDs are pl[floor number], pm[floor number] and pr[floor number]
+			document.getElementById('panelLeft').innerHTML += `<button id="pl${i}" onclick="left.panel_btn(${i})">${i}</button>`;
+			document.getElementById('panelMiddle').innerHTML += `<button id="pm${i}" onclick="mid.panel_btn(${i})">${i}</button>`;
+			document.getElementById('panelRight').innerHTML += `<button id="pr${i}" onclick="right.panel_btn(${i})">${i}</button>`;
+
+			// Add Doors to Elevators:
+			left.doors[i] = `l${i}`;
+			mid.doors[i] = `m${i}`;
+			right.doors[i] = `r${i}`;
+
+			// Add Buttons to Elevators:
+			left.btn[i] = `pl${i}`;
+			mid.btn[i] = `pm${i}`;
+			right.btn[i] = `pr${i}`;
+
+			// Add Floor to Queues:
+			left.queue[i] = false;
+			mid.queue[i] = false;
+			right.queue[i] = false;
+		}
+
+		// Activate Floor 1 Doors (Default Floor)
+		document.getElementById(left.doors[1]).classList.add('active');
+		document.getElementById(mid.doors[1]).classList.add('active');
+		document.getElementById(right.doors[1]).classList.add('active');
+	</script>
+</body>
+</html>
